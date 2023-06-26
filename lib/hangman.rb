@@ -7,7 +7,7 @@ class Hangman
   # Initialize the game object 
   def initialize
     # Variable stores word user must guess
-    @word = "cat"
+    @word = choose_word
 
     # Counter keeps track of how many guesses user has made (User gets 6 max guesses)
     @counter = 0 
@@ -37,16 +37,31 @@ class Hangman
   end 
 
   def play
-    # Display game rules 
-    intro_text
+    if File.exist?('savegame.json')
+      puts "A saved game has been detected, would you like to load that game now? (Y/N)"
+      response = gets.chomp.downcase 
 
-    puts "\n", @displayed_word.join, "\n"
+      until /^[yn]$/.match(response).to_s == response 
+        puts "A saved game has been detected, would you like to load that game now? (Y/N)"
+        response = gets.chomp.downcase 
+      end 
 
+      if response == 'y'
+        load_game
+        display_gameboard
+      end 
+    else
+      intro_text
+      puts "\n", @displayed_word.join, "\n"
+    end 
+    
     # Continue game until word has been guessed 
     until @displayed_word.none?("_ ")
       # IF counter reaches 6, user has no reamaining guesses and it is game over 
       if @counter >= 6
         puts "You lost!"
+        puts "The word was #{@word}"
+        File.delete('savegame.json')
         exit 
       end 
 
@@ -54,13 +69,15 @@ class Hangman
       guess = get_guess
 
       # Check user guess for a match to secret word or part of the secret word. 
-      check_for_match(guess)
+      check_for_match(guess) if guess != "0"
+
       # Print list of previous guesses and print current status of gameboard to the terminal 
       display_gameboard
     end 
 
     # Loop has sucessfuly met end conditions and user has won 
     puts "You win!"
+    File.delete('savegame.json')
   end 
 
   private
@@ -86,13 +103,26 @@ class Hangman
     puts "Pick a letter or try to guess the word! (0 to save game)"
     guess = gets.chomp.downcase
 
-    # Keep prompting for input unless user provides a letter or  provides a word that is same length as secret word 
-    until /^[a-z]{1}$/.match(guess).to_s == guess || /^[a-z]{#{@word.length}}$/.match(guess).to_s == guess
-      puts "Please enter a valid letter or a valid guess (The secret word is #{@word.length} guesss long)"
+    if guess == "0"
+      save_game
+      puts "Game saved!"
+      puts "Do you want to leave now? (Y/N)"
+      response = gets.chomp.downcase 
 
-      guess = gets.chomp.downcase
+      until /^[yn]$/.match(response).to_s == response 
+        puts "Do you want to leave now? (Y/N)"
+        response = gets.chomp.downcase 
+      end 
+
+      exit if response == "y"
+    else
+      # Keep prompting for input unless user provides a letter or  provides a word that is same length as secret word 
+      until (/^[a-z]{1}$/.match(guess).to_s == guess || /^[a-z]{#{@word.length}}$/.match(guess).to_s == guess) && guess != ""
+        puts "Please enter a valid letter or a valid guess (The secret word is #{@word.length} guesss long)"
+
+        guess = gets.chomp.downcase
+      end 
     end 
-
     # Return user input
     guess
   end 
@@ -101,7 +131,7 @@ class Hangman
     # If guess is a word and does not match secret word, increase counter 
     if guess.length > 1 && guess != @word
       @counter += 1
-      past_guesses.push(guess)
+      @past_guesses.push(guess)
       return 
     elsif guess.length > 1 && guess == @word
       @displayed_word = [guess]
@@ -127,18 +157,35 @@ class Hangman
   end 
 
   def display_gameboard
-    puts "\n", "Past guesses: #{@past_guesses.join(", ")}"
+    puts "\n", "Attempts left: #{6 - @counter}"
+    puts "Past guesses: #{@past_guesses.join(", ")}"
     puts @displayed_word.join
   end 
 
   def save_game
-    data = {"word": @word, "displayed_word": @displayed_word, "counter": @counter, "past_guesses": @past_guesses}
+    data = {"word": @word, 
+      "displayed_word": @displayed_word,
+      "counter": @counter, 
+      "past_guesses": @past_guesses
+    }
 
-    file = file.open('savegame.json', 'w')
+    file = File.open('savegame.json', 'w')
 
-    file.write(data.json)
+    file.write(JSON.pretty_generate(data))
 
     file.close
   end 
-  
+
+  def load_game
+    file = File.read('savegame.json')
+
+    data = JSON.parse(file)
+
+    puts data 
+
+    @word = data["word"]
+    @counter = data["counter"]
+    @past_guesses = data["past_guesses"]
+    @displayed_word = data["displayed_word"]
+  end 
 end 
